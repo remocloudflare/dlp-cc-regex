@@ -1,0 +1,16 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl.bak
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/.terraform.tfstate.lock.info
+!terraform/.terraform.lock.hcl
+
+# Node / Worker local
+node_modules/
+.wrangler/
+
+# OS
+.DS_Store

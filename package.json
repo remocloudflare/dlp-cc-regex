@@ -1,0 +1,11 @@
+{
+  "name": "dlp-cc-regex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RE2-safe credit-card regex playground for Cloudflare DLP custom entries (catches loose space/dash formatting).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node test/luhn.test.mjs"
+  }
+}
