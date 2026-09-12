@@ -106,7 +106,71 @@ Set `npm test` to run all `test/*.test.mjs` files with Node's test runner.
 Run: `npm test`
 Expected: all tests pass without warnings or errors.
 
-### Task 5: Exercise the Worker locally
+### Task 5: Add GCP and Azure credential presets
+
+**Objective:** Cover stable, high-confidence Google Cloud and Azure credential formats without generic noisy matching.
+
+**Files:**
+- Modify: `src/index.js`
+- Modify: `test/presets.test.mjs`
+
+**Step 1: Add failing family fixtures**
+
+Require Google OAuth `GOCSPX-`, Azure DevOps PAT with its fixed `AZDO` signature, contextual Azure Storage account keys, Azure Storage SAS, and contextual Microsoft Entra client secrets.
+
+**Step 2: Verify RED**
+
+Run: `node --test test/presets.test.mjs`
+Expected: FAIL because the cloud credential presets are absent.
+
+**Step 3: Add constrained patterns and metadata**
+
+Implement only stable prefixes/signatures or contextual forms. Do not add generic arbitrary token or password patterns.
+
+**Step 4: Verify GREEN**
+
+Run: `node --test test/presets.test.mjs`
+Expected: PASS with every positive and negative fixture checked individually.
+
+### Task 6: Add authoritative Rust regex validation
+
+**Objective:** Validate every preset and custom DLP rule with the same Rust regex syntax family documented by Cloudflare.
+
+**Files:**
+- Create: `rust-regex-validator/Cargo.toml`
+- Create: `rust-regex-validator/src/lib.rs`
+- Create: `scripts/build-regex-validator.sh`
+- Create: `src/regex_validator.wasm`
+- Modify: `src/index.js`
+- Modify: `wrangler.toml`
+- Modify: `terraform/worker.tf`
+- Modify: `test/presets.test.mjs`
+
+**Step 1: Add failing runtime tests**
+
+Require `/scan` to return Rust validation status and useful diagnostics. Test valid Rust regex, malformed syntax, lookaround, backreferences, scoped flags, Unicode properties, Cloudflare's 1,024-byte pattern limit, and its prohibition on unbounded `+` and `*` quantifiers.
+
+**Step 2: Verify RED**
+
+Run the focused Node and Worker tests; expect failure because no authoritative validator exists.
+
+**Step 3: Build the direct-ABI Wasm module**
+
+Compile Rust `regex` in Docker for `wasm32-unknown-unknown`, exporting memory allocation, validation, and error retrieval functions. Keep Rust source and the generated artifact reproducible.
+
+**Step 4: Integrate Worker and UI**
+
+Import the precompiled Wasm module, instantiate it once at module scope, validate every submitted regex, and show compiler diagnostics in the existing builder UI. Keep heuristic warnings supplemental.
+
+**Step 5: Wire Terraform**
+
+Upload `src/regex_validator.wasm` as `application/wasm` alongside `index.js`; include both hashes in change detection.
+
+**Step 6: Verify GREEN**
+
+Run all tests, Wrangler dry run, Terraform validation, and live local HTTP probes.
+
+### Task 7: Exercise the Worker locally
 
 **Objective:** Prove the module runs in the Workers runtime and the new detector catalog works through HTTP.
 

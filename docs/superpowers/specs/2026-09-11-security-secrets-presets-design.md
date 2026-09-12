@@ -43,9 +43,27 @@ Tests will verify:
 5. Existing loose/canonical credit-card and Luhn behavior remains intact.
 6. The generated page contains categorized option groups and preset guidance.
 
+## GCP and Azure expansion
+
+Add high-confidence cloud credential formats backed by stable structure:
+
+- Google OAuth client secrets (`GOCSPX-`) in addition to existing Google API keys.
+- Azure DevOps 84-character PATs with the fixed `AZDO` signature.
+- Azure Storage account keys only with explicit `AccountKey=` context.
+- Azure Storage SAS URLs/tokens only when Azure-specific fields and a signature are present.
+- Microsoft Entra client secrets only with explicit `AppSecret` or `ClientSecret` context; do not match arbitrary 40-character strings.
+
+## Authoritative syntax validation
+
+Cloudflare DLP patterns use Rust regex syntax, not RE2. Replace RE2-only wording and heuristic-only validation with a small Rust `regex` crate compiled to a prebuilt WebAssembly module. The Worker imports the `.wasm` as a separate precompiled module and calls it for every regex entered, including custom rules. Rust compile diagnostics appear directly in the UI and in `/scan` responses.
+
+Keep lightweight warnings only as supplemental guidance. The authoritative syntax pass/fail result comes from the Rust/Wasm compiler. Add Cloudflare-specific validation for the 1,024-byte pattern limit and the documented prohibition on unbounded `+` and `*` quantifiers. Include reproducible Rust source and a Docker build script; the host does not need Rust installed. Commit the generated `.wasm` artifact so Wrangler and Terraform deploy the same verified bytes.
+
+Terraform must upload the Wasm as `application/wasm` alongside the main JavaScript module. Do not inline Wasm bytes: that works in local `workerd` but deployed Workers accept only precompiled Wasm modules.
+
 ## Verification
 
-Run the Node test suite, Wrangler dry-run/deploy validation, and a real local `wrangler dev` instance. Probe `/health`, `/`, and `/scan` to verify the Worker executes rather than relying only on static tests.
+Run the Node test suite, compile all presets with the real Rust/Wasm validator, run Wrangler dry-run/deploy validation, validate Terraform, and exercise a real local `wrangler dev` instance. Probe `/health`, `/`, and `/scan` with valid Rust syntax plus unsupported lookaround/backreference patterns to verify the Worker executes rather than relying only on static tests.
 
 ## Non-goals
 
