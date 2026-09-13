@@ -611,10 +611,8 @@ function html() {
   </section>
 
   <section class="card">
-    <h2>4 · Or add to Terraform (tfvars)</h2>
-    <pre id="tf"></pre>
-    <button class="copy" data-target="tf">Copy tfvars entry</button>
-    <p class="count">Append this object to <code>dlp_custom_entries</code> in <code>terraform.tfvars</code>, then <code>terraform apply</code>.</p>
+    <h2>4 · Use the validated pattern</h2>
+    <p class="count">Copy the Rust regex above into your Cloudflare DLP workflow. This local branch does not require Terraform.</p>
   </section>
 </main>
 <footer class="bio">
@@ -698,13 +696,12 @@ async function run(){
   const warnEl = document.getElementById('compatibility-warn');
   warnEl.innerHTML = (d.compatibilityWarnings && d.compatibilityWarnings.length)
     ? '<p class="warn">⚠ '+d.compatibilityWarnings.map(escapeHtml).join('<br>⚠ ')+'</p>' : '';
-  document.getElementById('tf').textContent = d.tf || '';
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 document.querySelectorAll('button.copy').forEach(b=>{
   b.onclick=()=>{ const t=document.getElementById(b.dataset.target).textContent;
-    navigator.clipboard.writeText(t); b.textContent='Copied ✓'; setTimeout(()=>b.textContent=b.dataset.target==='rx'?'Copy regex':'Copy tfvars entry',1200); };
+    navigator.clipboard.writeText(t); b.textContent='Copied ✓'; setTimeout(()=>b.textContent='Copy regex',1200); };
 });
 
 applyPreset('cc-loose');

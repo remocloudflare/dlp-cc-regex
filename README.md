@@ -134,11 +134,16 @@ npm test
 
 For the Terraform-backed Cloudflare deployment, switch to the `terraform` branch.
 
-## Adding a new pattern (the intended loop)
-1. Open the Worker frontend, write/test your regex, pick validation.
-2. Click **Copy tfvars entry**.
-3. Paste the object into `dlp_custom_entries` in `terraform.tfvars`.
-4. `terraform apply`.
+## Creating a pattern locally
+
+1. Open the local builder with `npm run dev`, or use the public demo at
+   <https://dlp-regex.itlinux.cc/>.
+2. Choose a preset or select **Custom**.
+3. Test the pattern against customer-safe sample text.
+4. Copy the validated Rust regex for your DLP workflow.
+
+This `local` branch does not require Terraform. The Terraform export and
+deployment workflow are available on the `terraform` branch.
 
 ## Live preview
 
