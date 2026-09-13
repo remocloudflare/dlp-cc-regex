@@ -92,98 +92,27 @@ The local builder is stateless and includes the committed Rust/WASM validator.
 Terraform is not needed for local development; use it only for Cloudflare
 infrastructure or production deployment.
 
-### 2. Terraform module — `terraform/`
-Provider `cloudflare/cloudflare ~> 5.0`. File layout follows the house conventions (providers / variables / naming / domain-split / outputs).
+## Local-only mode
 
-| File | Contents |
-|---|---|
-| `providers.tf` | provider + version pin |
-| `variables.tf` | all variable declarations |
-| `naming.tf` | `name_prefix` locals + readiness guards |
-| `dlp.tf` | `cloudflare_zero_trust_dlp_custom_profile` with inline regex entries |
-| `gateway.tf` | `cloudflare_zero_trust_gateway_policy` (enforcement, opt-in) |
-| `worker.tf` | versioned Worker modules and deployment (JavaScript + separate Wasm module) |
-| `outputs.tf` | ids, dashboard links, verify hints |
+This branch is the easy local version. It runs entirely on your machine and does
+not require Terraform, Cloudflare credentials, or a remote Worker.
 
-#### Deploy
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # fill in token + account id
-export CLOUDFLARE_API_TOKEN="$(…)"             # optional; token is also read from tfvars
-terraform init
-terraform apply
+npm install
+npm run dev
 ```
-> **Shell note (nushell):** `$env.CLOUDFLARE_API_TOKEN = (open ~/.config/cloudflare/api-token | str trim)`
 
-#### Hosting on itlinux.cc
-This module is pre-wired for the **ciaoremo** account / **itlinux.cc** zone. The
-checked-out `terraform.tfvars` (gitignored) already points at:
+Open <http://localhost:8799/>. The local Worker includes the committed Rust/WASM
+validator and supports the same preset catalog, `/scan`, `/health`, and UI flow as
+the deployed version.
 
-- account `815b94af…` (ciaoremo)
-- zone `2503e0d9…` (itlinux.cc)
-- hostname **`dlp-regex.itlinux.cc`**
+Run the full local checks with:
 
-It uses the **safe per-hostname pattern**: a `cloudflare_workers_route` for
-`dlp-regex.itlinux.cc/*` + a proxied `AAAA 100::` DNS record. This is the same
-approach as `itlinux-pac` and does **NOT** replace any zone-wide triggers, so
-the other Workers on the zone (`itlinux-landing`, `itlinux-mesh`, `itlinux-pac`,
-`itlinux-email-router`, …) are untouched.
+```bash
+npm test
+```
 
-The Worker is uploaded through the provider's versioned module API. `index.js`,
-`regex-validator.js`, and `regex_validator.wasm` are separate modules; the Wasm
-module is sent as `application/wasm`, and a combined source hash tags each version.
-The proxied DNS record depends on the 100% Worker deployment, and the route
-depends on both that deployment and the DNS record. A first apply therefore
-cannot create the route before its active Worker and required proxied DNS exist.
-
-#### Idempotency
-Two things keep the DLP resources stable:
-- **DLP entries are standalone `cloudflare_zero_trust_dlp_entry` resources**
-  (the inline `entries` attribute on the profile is deprecated in v5). They're
-  attached with `for_each` **keyed by name**, so each entry is a stable map
-  element — not a content-hashed set element that would churn on the
-  API-assigned `entry_id`.
-- **Profile `description` is capped at 100 chars** (a `variable` `validation`
-  enforces it). The Cloudflare DLP API rejects longer strings with error 3302
-  ("string too long") — hit for real during the first apply.
-
-Known harmless warning: the provider marks `pattern.validation = "luhn"`
-deprecated but ships no replacement yet. It's a plan-time warning only (no
-drift); we keep it because Luhn is core to filtering false-positive card matches.
-
-The validator and bounded scanner use the pinned Rust `regex` 1.13.1 crate
-compiled to a standalone Wasm module. Rust is authoritative for both syntax and
-matching; no user-supplied pattern is executed by JavaScript `RegExp`. Builds run
-in Docker, and release verification builds twice and compares SHA-256 hashes.
-Cloudflare constraints are enforced before invoking Wasm, including the
-1,024-byte regex limit and bounded quantifiers.
-
-To host it elsewhere, set `worker_hostname` + `zone_id` (or leave both `""` for
-a script-only deploy reachable via workers.dev).
-
-#### Staging flags (default OFF where risky)
-
-| Flag | Default | Effect |
-|---|---|---|
-| `deploy_worker` | `true` | deploy the builder frontend Worker |
-| `deploy_dlp_profile` | `true` | create the DLP custom profile + entries |
-| `deploy_gateway_rule` | `false` | create the Gateway HTTP policy that **enforces** the profile |
-| `gateway_rule_action` | `allow` | `allow` (monitor) → `block` once tuned |
-| `gateway_payload_log` | `false` | needs an X25519 key in DLP settings |
-
-With DLP off the Gateway rule correctly skips (guard engages, not a half-build).
-
-## API token scopes
-- **Account · Zero Trust · Edit** (DLP profile + Gateway policy)
-- **Account · Workers Scripts · Edit** (the frontend Worker)
-
-## Wiring: two halves of ONE rule
-- **DLP profile / custom entry** = *what* is sensitive (the regex). `dlp.tf`.
-- **Gateway HTTP policy** = *what to do about it* (allow/block), references the profile. `gateway.tf`.
-
-Prereqs for the Gateway rule to actually fire: **TLS inspection ON**. Start with
-`gateway_rule_action = "allow"` + payload logging to tune false positives, then
-switch to `block`.
+For the Terraform-backed Cloudflare deployment, switch to the `terraform` branch.
 
 ## Adding a new pattern (the intended loop)
 1. Open the Worker frontend, write/test your regex, pick validation.
