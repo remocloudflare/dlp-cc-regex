@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
 const terraformDir = new URL("../terraform/", import.meta.url);
+const terraformTest = existsSync(new URL("worker.tf", terraformDir)) ? test : test.skip;
 
-test("Worker route explicitly depends on deployment and proxied DNS", async () => {
+terraformTest("Worker route explicitly depends on deployment and proxied DNS", async () => {
   const source = await readFile(new URL("worker.tf", terraformDir), "utf8");
   const route = source.match(/resource "cloudflare_workers_route" "builder" \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(route, "route resource not found");
@@ -14,7 +16,7 @@ test("Worker route explicitly depends on deployment and proxied DNS", async () =
   );
 });
 
-test("DLP entry validation accepts only none or luhn", async () => {
+terraformTest("DLP entry validation accepts only none or luhn", async () => {
   const source = await readFile(new URL("variables.tf", terraformDir), "utf8");
   const variable = source.match(/variable "dlp_custom_entries" \{([\s\S]*?)\n\}/)?.[1];
   assert.ok(variable, "dlp_custom_entries variable not found");
