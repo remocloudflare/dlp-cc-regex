@@ -5,8 +5,9 @@
   "type": "module",
   "description": "Rust-regex-validated security pattern builder for Cloudflare DLP custom entries.",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "npx --yes wrangler@4.131.1 dev --local --port 8799",
+    "dev:remote": "npx --yes wrangler@4.131.1 dev --port 8799",
+    "deploy": "npx --yes wrangler@4.131.1 deploy",
     "test": "node --experimental-wasm-modules --disable-warning=ExperimentalWarning --test test/*.test.mjs"
   }
 }

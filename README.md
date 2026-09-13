@@ -81,11 +81,16 @@ inline Rust flags in the DLP pattern, for example `(?i:foo)`.
 
 Local dev:
 ```bash
-npm run dev     # http://localhost:8787  (or: npx wrangler dev --port 8799 --local)
+npm run dev     # local-only: http://localhost:8799 (no Terraform or CF credentials)
 npm test        # catalog, API limits/routes, HTML script/ID, Rust/Wasm, and Luhn checks
 ./scripts/build-regex-validator.sh  # reproducible Docker Wasm build
-npx wrangler deploy --dry-run       # package without publishing
+npm run dev:remote                  # optional remote dev session; requires CF auth
+npx --yes wrangler@4.131.1 deploy --dry-run  # package without publishing
 ```
+
+The local builder is stateless and includes the committed Rust/WASM validator.
+Terraform is not needed for local development; use it only for Cloudflare
+infrastructure or production deployment.
 
 ### 2. Terraform module — `terraform/`
 Provider `cloudflare/cloudflare ~> 5.0`. File layout follows the house conventions (providers / variables / naming / domain-split / outputs).
