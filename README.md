@@ -138,6 +138,4 @@ rust-regex-validator/            pinned Rust source and Cargo lock
 scripts/build-regex-validator.sh Docker-based reproducible build
 test/*.test.mjs                  catalog, scan, Rust validation, and Luhn tests
 wrangler.toml, package.json      Worker dev/deploy
-terraform/*.tf                   the module
-terraform/terraform.tfvars.example
 ```
