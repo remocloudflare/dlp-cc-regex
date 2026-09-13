@@ -2,7 +2,7 @@
 name: dlp-cc-regex
 description: Use when working on this Cloudflare DLP regex builder.
 license: MIT
-compatibility: Requires Node.js, Wrangler, Terraform, and Docker for Rust/WASM rebuilds.
+compatibility: Local use requires Node.js and Wrangler; Docker is only needed to rebuild WASM.
 metadata:
   project: dlp-cc-regex
   owner: Remo Mattei
@@ -23,7 +23,7 @@ Load this skill for changes to:
 - `src/index.js`, the preset catalog, `/scan`, or the browser UI.
 - `src/regex-validator.js` or `src/regex_validator.wasm`.
 - `rust-regex-validator/` or `scripts/build-regex-validator.sh`.
-- Terraform Worker/DLP resources, README examples, screenshots, or deployment.
+- Terraform Worker/DLP resources, README examples, screenshots, or production deployment.
 
 ## Project invariants
 
@@ -83,9 +83,11 @@ Open `http://localhost:8799/`. Verify `/health`, `/`, and `/scan` locally. The l
 Worker includes the committed Rust WASM module and uses the same validation and scan
 path as production. Stop the Wrangler process when finished.
 
-Use Terraform only when the user explicitly requests Cloudflare infrastructure or a
-production update. A local UI/test task must not run `terraform apply`, contact the
-remote Worker, or require Cloudflare credentials.
+Terraform is optional. Use it only when the user explicitly requests Cloudflare
+infrastructure or a production update. A local UI/test task must not require
+Terraform, run `terraform apply`, contact the remote Worker, or require Cloudflare
+credentials. Users without Terraform can use the committed WASM artifact and the
+local Wrangler workflow normally.
 
 ## Rust/WASM workflow
 
@@ -110,14 +112,12 @@ Before claiming a change is complete:
 npm test
 npx --yes wrangler@4.131.1 dev --local --port 8799
 npx --yes wrangler@4.131.1 deploy --dry-run
-terraform -chdir=terraform fmt -check
-terraform -chdir=terraform validate
-terraform -chdir=terraform plan -input=false -no-color
 ```
 
-The Terraform plan must contain no unexpected destroys. A normal Worker content
-update should be a new `cloudflare_worker_version` and deployment, with the route
-ordered after the deployment and proxied DNS record.
+If Terraform is installed and the task changes infrastructure, the plan must contain
+no unexpected destroys. A normal Worker content update should be a new
+`cloudflare_worker_version` and deployment, with the route ordered after the
+deployment and proxied DNS record.
 
 For runtime changes, start a real local Worker with Wrangler and probe `/`, `/health`,
 and `/scan`. Test valid Rust syntax, malformed syntax, backreferences/lookaround,
