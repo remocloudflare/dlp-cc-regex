@@ -32,7 +32,7 @@ variable "worker_name" {
 variable "worker_compatibility_date" {
   description = "Workers compatibility date."
   type        = string
-  default     = "2026-08-01"
+  default     = "2026-09-11"
 }
 
 variable "worker_hostname" {
@@ -80,7 +80,7 @@ variable "dlp_profile_description" {
 
 variable "dlp_custom_entries" {
   description = <<-EOT
-    Regex entries for the DLP custom profile. Each: name, regex (RE2 syntax),
+    Regex entries for the DLP custom profile. Each: name, regex (Rust syntax),
     optional validation ("luhn" or "none"). The default catches 13-19 digit
     card numbers with loose space/dash separators (e.g. "1 344-4343 12345").
     Build/test new patterns in the Worker frontend, then paste the generated
@@ -99,6 +99,11 @@ variable "dlp_custom_entries" {
       validation = "luhn"
     },
   ]
+
+  validation {
+    condition     = alltrue([for entry in var.dlp_custom_entries : contains(["none", "luhn"], entry.validation)])
+    error_message = "Each dlp_custom_entries validation must be \"none\" or \"luhn\"."
+  }
 }
 
 # ---- Gateway HTTP policy (enforcement) -----------------------------------

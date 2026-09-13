@@ -1,30 +1,60 @@
-# The self-serve DLP Regex Builder frontend, deployed as a Workers script.
-# It's a single ESM module (../src/index.js) — no bundler/build step needed.
-#
-# content_file REQUIRES content_sha256 in the v5 provider.
-
-resource "cloudflare_workers_script" "builder" {
+# The installed Cloudflare provider 5.23 schema exposes multi-file uploads on
+# cloudflare_worker_version.modules (not cloudflare_workers_script). Keep the
+# Wasm as its own application/wasm module rather than embedding it in JavaScript.
+resource "cloudflare_worker" "builder" {
   count = local.worker_ready ? 1 : 0
 
-  account_id     = var.cloudflare_account_id
-  script_name    = local.worker_name
-  content_file   = local.worker_bundle
-  content_sha256 = filesha256(local.worker_bundle)
-  main_module    = "index.js"
-
-  compatibility_date = var.worker_compatibility_date
+  account_id = var.cloudflare_account_id
+  name       = local.worker_name
 
   observability = {
     enabled = true
   }
+}
 
-  # The CF v5 provider returns extra observability sub-fields
-  # (head_sampling_rate, logs, traces) that aren't declared above, which would
-  # otherwise cause a perpetual diff on every apply. Ignore the whole block —
-  # we only care that observability is enabled. Keeps the module idempotent.
-  lifecycle {
-    ignore_changes = [observability]
+resource "cloudflare_worker_version" "builder" {
+  count = local.worker_ready ? 1 : 0
+
+  account_id         = var.cloudflare_account_id
+  worker_id          = cloudflare_worker.builder[0].id
+  main_module        = "index.js"
+  compatibility_date = var.worker_compatibility_date
+
+  annotations = {
+    workers_message = "DLP regex builder ${local.worker_content_sha256}"
+    workers_tag     = local.worker_content_sha256
   }
+
+  modules = [
+    {
+      name         = "index.js"
+      content_file = local.worker_bundle
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "regex-validator.js"
+      content_file = local.worker_validator
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "regex_validator.wasm"
+      content_file = local.worker_validator_wasm
+      content_type = "application/wasm"
+    },
+  ]
+}
+
+resource "cloudflare_workers_deployment" "builder" {
+  count = local.worker_ready ? 1 : 0
+
+  account_id  = var.cloudflare_account_id
+  script_name = cloudflare_worker.builder[0].name
+  strategy    = "percentage"
+
+  versions = [{
+    version_id = cloudflare_worker_version.builder[0].id
+    percentage = 100
+  }]
 }
 
 # --- Custom-hostname routing (SAFE per-hostname pattern) ------------------
@@ -38,7 +68,9 @@ resource "cloudflare_workers_route" "builder" {
 
   zone_id = var.zone_id
   pattern = "${var.worker_hostname}/*"
-  script  = cloudflare_workers_script.builder[0].script_name
+  script  = cloudflare_worker.builder[0].name
+
+  depends_on = [cloudflare_workers_deployment.builder, cloudflare_dns_record.builder]
 }
 
 # Proxied AAAA 100:: is the standard placeholder for a proxied Workers hostname.
@@ -51,4 +83,6 @@ resource "cloudflare_dns_record" "builder" {
   content = "100::"
   ttl     = 1
   proxied = true
+
+  depends_on = [cloudflare_workers_deployment.builder]
 }

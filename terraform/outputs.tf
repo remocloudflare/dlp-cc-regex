@@ -15,7 +15,7 @@ output "gateway_rule_id" {
 
 output "worker_name" {
   description = "Deployed Worker script name (null if not deployed)."
-  value       = local.worker_ready ? cloudflare_workers_script.builder[0].script_name : null
+  value       = local.worker_ready ? cloudflare_worker.builder[0].name : null
 }
 
 output "worker_url" {

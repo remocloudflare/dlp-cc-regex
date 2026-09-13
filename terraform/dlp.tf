@@ -7,7 +7,7 @@
 # We key the entries with for_each by NAME so each is a stable, addressable
 # resource (map key) rather than a content-hashed set element — this is what
 # keeps re-applies idempotent (no destroy/recreate churn on the API-assigned
-# entry_id). RE2 engine; validation = "luhn" is the only supported checksum.
+# entry_id). Rust regex syntax; validation = "luhn" is the supported checksum.
 
 resource "cloudflare_zero_trust_dlp_custom_profile" "cc" {
   count = local.dlp_ready ? 1 : 0

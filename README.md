@@ -6,7 +6,7 @@ A self-serve **DLP Regex Builder** (Cloudflare Worker frontend) + a **Terraform 
 ┌─────────────────────────┐        ┌──────────────────────────────┐
 │  Worker frontend         │  copy  │  Terraform module            │
 │  (author + test regex)   ├───────▶│  DLP custom profile + entry  │
-│  → RE2 pattern           │ tfvars │  (+ optional Gateway policy) │
+│  → Rust regex pattern    │ tfvars │  (+ optional Gateway policy) │
 │  → tfvars entry          │        │                              │
 └─────────────────────────┘        └──────────────────────────────┘
 ```
@@ -20,33 +20,71 @@ numbers (4-4-4-4). Cards typed with odd separators slip past it:
 1 344-4343 12345   ← 13 digits, weird grouping → default detector misses it
 ```
 
-DLP custom entries run on the **RE2** engine (no lookahead, backreferences, or
+DLP custom entries use **Rust regex syntax** (no lookaround, backreferences, or
 checksum). So we split the job:
 
-1. **RE2-safe regex** in the DLP entry — matches 13–19 digits where any pair may
+1. **Rust regex** in the DLP entry — matches 13–19 digits where any pair may
    be separated by a single space or dash:
    ```
    \b\d(?:[ -]?\d){12,18}\b
    ```
-2. **Luhn** — RE2 can't do it, so it's expressed as the entry's `validation`
-   option. The Worker frontend runs Luhn in JS so you can *preview* real-vs-random matches while authoring.
+2. **Luhn** — regex cannot do it, so it is expressed as the entry's `validation`
+   option. The Worker performs the authoritative Rust regex match first, then
+   applies the Luhn post-filter to each matched substring.
 
 ## Two parts, one repo
 
 ### 1. Worker frontend — `src/index.js`
 A dark self-serve page where a customer:
-- picks a **preset** (loose CC ★ / canonical CC / custom) or writes any regex,
+- picks a categorized **high-confidence preset** or **Custom** and sees the preset's detection note,
 - tests it live against sample text,
-- sees **RE2-unsupported warnings** (lookahead/backrefs) before they ship a pattern DLP would reject,
+- uses Rust regex 1.13.1 compiled to WebAssembly for authoritative validation and matching,
+- sees Cloudflare's 1,024-byte and bounded-quantifier constraints separately,
+- displays match text and offsets returned by the Rust engine,
 - optionally runs **Luhn** validation on matches,
 - **copies** either the raw regex (for the dashboard) or a ready-made `dlp_custom_entries` tfvars object.
 
-Endpoints: `GET /` (UI), `POST /scan`, `GET /api?regex=&text=&validation=luhn` (curl), `GET /health`.
+The catalog deliberately favors recognizable prefixes and bounded assignment
+contexts over generic `secret=...` matching. Generic assignments are excluded:
+they are too noisy for a high-confidence production posture. Several regexes
+consume an allowed trailing delimiter because Rust regex has no lookaround; the
+note shown for each preset calls this out where relevant.
+
+#### Preset catalog
+
+| Category | Presets |
+|---|---|
+| Financial data | Credit card (loose separators) ★; Credit card (canonical 4-4-4-4) |
+| Cloud providers | AWS access key ID; Google API key; Google OAuth client secret; Azure Storage account key; Azure Storage shared access signature; Microsoft Entra client secret |
+| Source control | Azure DevOps personal access token; GitHub classic token families; GitHub fine-grained PAT; GitLab personal access token |
+| AI and API providers | OpenAI project/service-account key; OpenAI user key; Anthropic API key; Stripe live secret/restricted key |
+| Messaging | Slack access token; Slack incoming webhook URL |
+| Credentials and infrastructure | PEM private-key header; compact JWT; authenticated HTTP(S) URL; database URL with credentials |
+| Custom | Custom (write your own) |
+
+#### HTTP contract and limits
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` | `GET` | Builder UI |
+| `/health` | `GET` | Plain `ok` health response |
+| `/api?regex=&text=&validation=` | `GET` | Curl-friendly scan |
+| `/scan` | `POST` | JSON scan API |
+
+Known paths reject unsupported methods with `405` and `Allow`; unknown paths
+return `404`. `/scan` requires a JSON object and rejects malformed JSON, null,
+arrays, and non-JSON content. Limits are **128 KiB request body**, **1,024 UTF-8
+bytes regex**, **64 KiB sample text**, and **256 UTF-8 bytes entry name**.
+`validation` is only `none` or `luhn`; `flags` is only `g`. Matching always uses
+the bounded Rust Wasm scanner. Case/multiline/dotall behavior must be expressed as
+inline Rust flags in the DLP pattern, for example `(?i:foo)`.
 
 Local dev:
 ```bash
 npm run dev     # http://localhost:8787  (or: npx wrangler dev --port 8799 --local)
-npm test        # regex + Luhn logic checks
+npm test        # catalog, API limits/routes, HTML script/ID, Rust/Wasm, and Luhn checks
+./scripts/build-regex-validator.sh  # reproducible Docker Wasm build
+npx wrangler deploy --dry-run       # package without publishing
 ```
 
 ### 2. Terraform module — `terraform/`
@@ -59,7 +97,7 @@ Provider `cloudflare/cloudflare ~> 5.0`. File layout follows the house conventio
 | `naming.tf` | `name_prefix` locals + readiness guards |
 | `dlp.tf` | `cloudflare_zero_trust_dlp_custom_profile` with inline regex entries |
 | `gateway.tf` | `cloudflare_zero_trust_gateway_policy` (enforcement, opt-in) |
-| `worker.tf` | `cloudflare_workers_script` (the frontend) |
+| `worker.tf` | versioned Worker modules and deployment (JavaScript + separate Wasm module) |
 | `outputs.tf` | ids, dashboard links, verify hints |
 
 #### Deploy
@@ -86,17 +124,15 @@ approach as `itlinux-pac` and does **NOT** replace any zone-wide triggers, so
 the other Workers on the zone (`itlinux-landing`, `itlinux-mesh`, `itlinux-pac`,
 `itlinux-email-router`, …) are untouched.
 
-Verified `terraform plan` against the live account: **4 to add, 0 to change, 0
-to destroy** (Worker, route, DNS record, DLP profile).
+The Worker is uploaded through the provider's versioned module API. `index.js`,
+`regex-validator.js`, and `regex_validator.wasm` are separate modules; the Wasm
+module is sent as `application/wasm`, and a combined source hash tags each version.
+The proxied DNS record depends on the 100% Worker deployment, and the route
+depends on both that deployment and the DNS record. A first apply therefore
+cannot create the route before its active Worker and required proxied DNS exist.
 
-#### Idempotency (proven)
-`apply` → `plan` returns **"No changes. Your infrastructure matches the
-configuration."** — verified against the live account with two consecutive clean
-plans. Three things make it stable:
-
-- **`observability` is `ignore_changes`d** on the Worker — the v5 provider fills
-  in `head_sampling_rate`/`logs`/`traces` itself and would otherwise diff every
-  apply (same guard as the sibling `itlinux-landing` Worker).
+#### Idempotency
+Two things keep the DLP resources stable:
 - **DLP entries are standalone `cloudflare_zero_trust_dlp_entry` resources**
   (the inline `entries` attribute on the profile is deprecated in v5). They're
   attached with `for_each` **keyed by name**, so each entry is a stable map
@@ -109,6 +145,13 @@ plans. Three things make it stable:
 Known harmless warning: the provider marks `pattern.validation = "luhn"`
 deprecated but ships no replacement yet. It's a plan-time warning only (no
 drift); we keep it because Luhn is core to filtering false-positive card matches.
+
+The validator and bounded scanner use the pinned Rust `regex` 1.13.1 crate
+compiled to a standalone Wasm module. Rust is authoritative for both syntax and
+matching; no user-supplied pattern is executed by JavaScript `RegExp`. Builds run
+in Docker, and release verification builds twice and compares SHA-256 hashes.
+Cloudflare constraints are enforced before invoking Wasm, including the
+1,024-byte regex limit and bounded quantifiers.
 
 To host it elsewhere, set `worker_hostname` + `zone_id` (or leave both `""` for
 a script-only deploy reachable via workers.dev).
@@ -123,7 +166,7 @@ a script-only deploy reachable via workers.dev).
 | `gateway_rule_action` | `allow` | `allow` (monitor) → `block` once tuned |
 | `gateway_payload_log` | `false` | needs an X25519 key in DLP settings |
 
-Verified plan counts: default = **2** (Worker + DLP); `+deploy_gateway_rule` = **3**; with DLP off the Gateway rule correctly **skips** (guard engages, not a half-build).
+With DLP off the Gateway rule correctly skips (guard engages, not a half-build).
 
 ## API token scopes
 - **Account · Zero Trust · Edit** (DLP profile + Gateway policy)
@@ -143,10 +186,23 @@ switch to `block`.
 3. Paste the object into `dlp_custom_entries` in `terraform.tfvars`.
 4. `terraform apply`.
 
+## Live preview
+
+The builder is live at [dlp-regex.itlinux.cc](https://dlp-regex.itlinux.cc/).
+The screenshots below were captured from the deployed Worker at desktop and mobile widths.
+
+![DLP Regex Builder desktop](docs/screenshots/dlp-regex-builder-desktop.png)
+
+![DLP Regex Builder mobile](docs/screenshots/dlp-regex-builder-mobile.png)
+
 ## Files
 ```
 src/index.js                     Worker (frontend + scan API)
-test/luhn.test.mjs               logic tests
+src/regex-validator.js           Wasm ABI + Cloudflare constraints
+src/regex_validator.wasm         generated Rust regex validator
+rust-regex-validator/            pinned Rust source and Cargo lock
+scripts/build-regex-validator.sh Docker-based reproducible build
+test/*.test.mjs                  catalog, scan, Rust validation, and Luhn tests
 wrangler.toml, package.json      Worker dev/deploy
 terraform/*.tf                   the module
 terraform/terraform.tfvars.example

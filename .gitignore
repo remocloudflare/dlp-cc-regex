@@ -11,6 +11,7 @@ terraform/.terraform.tfstate.lock.info
 # Node / Worker local
 node_modules/
 .wrangler/
+rust-regex-validator/target/
 
 # OS
 .DS_Store
