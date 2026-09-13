@@ -107,9 +107,27 @@ Use it to demonstrate:
 4. Show the authoritative Rust validation result and matches.
 5. Copy the Rust regex or Terraform entry when the customer is ready to deploy.
 
-The live site does not require a customer account or Terraform. Do not paste real
+The live demo does not require a customer account or Terraform. Do not paste real
 customer credentials into the public demo; use synthetic values or the included
 samples.
+
+### Customer deployment prerequisites
+
+The demo and the customer deployment are separate. A customer who wants to ship a
+rule into their own Cloudflare account will need:
+
+- A Cloudflare account with Zero Trust/DLP enabled.
+- Their Cloudflare account ID and the target Zero Trust configuration.
+- A Cloudflare API token with the minimum required permissions for their chosen
+  workflow: **Account → Zero Trust → Edit** for DLP/Gateway configuration and,
+  when deploying the Worker, **Account → Workers Scripts → Edit**.
+- Their organization's approval to inspect the intended traffic and enable TLS
+  inspection/Gateway enforcement where required.
+
+Never paste the API token into the public demo or commit it to Git. The customer
+should create and store it in their own secret manager or deployment environment.
+The `terraform` branch contains the infrastructure deployment path; the `local`
+branch is the sales/demo builder only.
 
 ### Local development
 
