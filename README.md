@@ -111,25 +111,15 @@ The live site does not require a customer account or Terraform. Do not paste rea
 customer credentials into the public demo; use synthetic values or the included
 samples.
 
-### Run the demo locally
+### Local development
 
-For a laptop demo, offline development, or a customer environment where the public
-URL is not suitable:
+This section is for engineers maintaining the tool, not for sales demos. It
+requires a Node.js development environment, although it does not require a
+Cloudflare account for local-only mode:
 
 ```bash
 npm install
 npm run dev
-```
-
-Open <http://localhost:8799/>. This local branch runs entirely on the laptop and
-requires no Terraform, Cloudflare credentials, or remote Worker. It includes the
-same preset catalog, Rust/WASM validator, `/scan`, `/health`, and UI flow as the
-live version.
-
-Run the local checks with:
-
-```bash
-npm test
 ```
 
 For the Terraform-backed Cloudflare deployment, switch to the `terraform` branch.
