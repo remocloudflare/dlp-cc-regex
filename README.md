@@ -129,6 +129,22 @@ should create and store it in their own secret manager or deployment environment
 The `terraform` branch contains the infrastructure deployment path; the `local`
 branch is the sales/demo builder only.
 
+### Deploy your own Worker
+
+You can deploy the stateless builder from this branch without Terraform or DLP account changes:
+
+```bash
+git clone --branch local https://github.com/remocloudflare/dlp-cc-regex.git
+cd dlp-cc-regex
+npm install
+npm test
+npx wrangler login
+npx --yes wrangler@4.131.1 deploy --dry-run
+npm run deploy
+```
+
+This creates an independent `workers.dev` deployment with the committed Rust/Wasm validator. It does not create a DLP profile, Gateway policy, DNS record, route, or custom hostname. Use the `terraform` branch only when you intentionally want those account-side resources, and supply your own account/zone values without committing tokens, tfvars, plans, or state.
+
 ### Local development
 
 This section is for engineers maintaining the tool, not for sales demos. It
