@@ -141,8 +141,7 @@ checked-out `terraform.tfvars` (gitignored) already points at:
 It uses the **safe per-hostname pattern**: a `cloudflare_workers_route` for
 `dlp-regex.itlinux.cc/*` + a proxied `AAAA 100::` DNS record. This is the same
 approach as `itlinux-pac` and does **NOT** replace any zone-wide triggers, so
-the other Workers on the zone (`itlinux-landing`, `itlinux-mesh`, `itlinux-pac`,
-`itlinux-email-router`, …) are untouched.
+other Workers and routes on the zone remain untouched.
 
 The Worker is uploaded through the provider's versioned module API. `index.js`,
 `regex-validator.js`, and `regex_validator.wasm` are separate modules; the Wasm
