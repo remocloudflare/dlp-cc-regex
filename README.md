@@ -92,6 +92,21 @@ The local builder is stateless and includes the committed Rust/WASM validator.
 Terraform is not needed for local development; use it only for Cloudflare
 infrastructure or production deployment.
 
+#### Deploy your own Worker only
+
+The regex builder can be deployed independently without Terraform or DLP account changes:
+
+```bash
+git clone https://github.com/remocloudflare/dlp-cc-regex.git
+cd dlp-cc-regex
+npm test
+npx wrangler login
+npx --yes wrangler@4.131.1 deploy --dry-run
+npm run deploy
+```
+
+This publishes the stateless builder and its committed Rust/Wasm validator to your authenticated Cloudflare account. It does not create a DLP profile, Gateway policy, DNS record, route, or custom hostname. Use the Terraform module below only when you intentionally want those account-side resources; copy `terraform.tfvars.example`, supply your own account/zone values, and keep tokens and state out of Git.
+
 ### 2. Terraform module — `terraform/`
 Provider `cloudflare/cloudflare ~> 5.0`. File layout follows the house conventions (providers / variables / naming / domain-split / outputs).
 
