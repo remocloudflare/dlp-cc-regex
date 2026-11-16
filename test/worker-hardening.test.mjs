@@ -43,6 +43,15 @@ test("root uses the shared penguin background with readable layered overlays", a
   assert.match(body, /body\s*\{[^}]*min-height:\s*100vh[^}]*isolation:\s*isolate/s);
 });
 
+test("desktop uses a 40/60 layout and long generated values wrap", async () => {
+  const body = await rootHtml();
+  assert.match(body, /main\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(0,\s*3fr\)/s);
+  assert.match(body, /@media\s*\(max-width:\s*920px\)\s*\{\s*main\s*\{\s*grid-template-columns:\s*1fr/s);
+  assert.match(body, /code\.regex\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
+  assert.match(body, /th,td\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
+  assert.match(body, /pre\s*\{[^}]*white-space:\s*pre-wrap[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
+});
+
 test("root includes a compact Who am I bio and linked attribution", async () => {
   const body = await rootHtml();
   const text = body.replace(/<[^>]+>/g, " ").replace(/\s+\./g, ".").replace(/\s+/g, " ");
