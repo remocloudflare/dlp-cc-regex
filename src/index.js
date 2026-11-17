@@ -611,7 +611,17 @@ function html(nonce) {
   .toolkit-panel[hidden] { display:none; }
   .regex-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; align-items:start; }
   .panel-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; align-items:start; }
+  .key-panel { display:grid; gap:12px; }
+  .key-cards { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; align-items:start; }
+  .key-workflow-list { display:grid; gap:12px; margin:0 0 16px; }
+  .key-workflow-list dt { color:var(--fg); font-size:13px; font-weight:600; }
+  .key-workflow-list dd { margin:2px 0 0; color:var(--muted); font-size:12px; }
+  .key-fallback { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:11px 14px;
+    border:1px solid var(--border); border-radius:8px; background:rgba(22,27,34,.78); color:var(--muted); font-size:12px; }
+  .key-fallback h2 { margin:0; color:var(--fg); font-size:12px; }
+  .key-fallback code { color:var(--accent); }
   @media (max-width:920px){ .regex-grid,.panel-grid{ grid-template-columns:1fr; } main{ padding:18px; } }
+  @media (max-width:920px){ .key-cards{ grid-template-columns:1fr; } }
   .card { background:rgba(22,27,34,.93); border:1px solid var(--border); border-radius:10px; padding:18px; backdrop-filter:blur(6px); }
   .card h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
   footer.bio { margin:0 28px 24px; padding:14px 18px; max-width:720px; border:1px solid var(--border);
@@ -747,21 +757,31 @@ function html(nonce) {
     </section>
   </section>
 
-  <section id="panel-keys" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-keys" hidden>
-    <section class="card">
-      <h2>Browser-local X25519 keys</h2>
-      <p>Generate a Cloudflare-compatible X25519 key pair entirely in this browser. Copy the public key into Cloudflare payload logging; the private key downloads automatically and is retained only in page memory for re-download. Store it securely because Cloudflare cannot recover it.</p>
-      <div class="actions"><button class="copy" id="generate-key">Generate key pair</button><button class="copy" id="download-key-again" disabled>Download again</button></div>
-      <p class="status" id="key-status" role="status" aria-live="assertive"></p>
-    </section>
-    <section class="card">
-      <h2>Public key</h2>
-      <code class="regex" id="public-key">Generate a pair to show the public key.</code>
-      <button class="copy" data-target="public-key">Copy public key</button>
-      <p class="count">Official fallback: <code>./matched-data-cli generate-key-pair</code></p>
-      <p class="count"><a href="https://developers.cloudflare.com/waf/managed-rules/payload-logging/command-line/generate-key-pair/" target="_blank" rel="noopener">Cloudflare key-generation documentation</a></p>
-      <p class="count">Private key downloaded. Cloudflare cannot recover it; store it securely.</p>
-    </section>
+  <section id="panel-keys" class="toolkit-panel key-panel" role="tabpanel" aria-labelledby="tab-keys" hidden>
+    <div class="key-cards">
+      <section class="card key-workflow">
+        <h2>Browser-local X25519 workflow</h2>
+        <dl class="key-workflow-list">
+          <div><dt>1 · Generate locally</dt><dd>Create a Cloudflare-compatible X25519 key pair entirely in this browser.</dd></div>
+          <div><dt>2 · Private key downloads automatically</dt><dd>The private key file downloads as soon as the pair is generated.</dd></div>
+          <div><dt>3 · Store it securely</dt><dd>Cloudflare cannot recover it. Losing the private key means generating a new pair.</dd></div>
+          <div><dt>4 · Copy the public key into Cloudflare payload logging</dt><dd>Only the public key belongs in the Cloudflare configuration.</dd></div>
+          <div><dt>5 · Download again only in this page session</dt><dd>The private key is retained only in page memory for re-download until this page is closed or refreshed.</dd></div>
+        </dl>
+        <div class="actions"><button class="copy" id="generate-key">Generate key pair</button><button class="copy" id="download-key-again" disabled>Download again</button></div>
+      </section>
+      <section class="card key-output">
+        <h2>Public key output</h2>
+        <code class="regex" id="public-key">Generate a pair to show the public key.</code>
+        <button class="copy" data-target="public-key">Copy public key</button>
+        <p class="status" id="key-status" role="status" aria-live="assertive"></p>
+      </section>
+    </div>
+    <aside class="key-fallback" aria-labelledby="key-fallback-title">
+      <h2 id="key-fallback-title">CLI fallback</h2>
+      <code>./matched-data-cli generate-key-pair</code>
+      <a href="https://developers.cloudflare.com/waf/managed-rules/payload-logging/command-line/generate-key-pair/" target="_blank" rel="noopener">Cloudflare key-generation documentation</a>
+    </aside>
   </section>
 </main>
 <footer class="bio">

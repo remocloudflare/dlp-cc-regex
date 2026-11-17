@@ -43,6 +43,40 @@ test("tool explanations describe safe handoff and key handling", async () => {
   assert.match(html, /retained only in page memory/i);
 });
 
+test("payload logging keys separate the numbered workflow, public output, and CLI fallback", async () => {
+  const html = await page();
+  const panel = html.match(/<section id="panel-keys"[\s\S]*?<\/section>\s*<\/main>/)?.[0];
+  assert.ok(panel, "payload logging keys panel should exist");
+  assert.match(panel, /class="toolkit-panel key-panel"/);
+  assert.match(panel, /class="key-cards"/);
+  for (const step of [
+    "1 · Generate locally",
+    "2 · Private key downloads automatically",
+    "3 · Store it securely",
+    "4 · Copy the public key into Cloudflare payload logging",
+    "5 · Download again only in this page session",
+  ]) assert.match(panel, new RegExp(step.replace("·", "\\·"), "i"));
+
+  const workflow = panel.match(/<section class="card key-workflow">[\s\S]*?<\/section>/)?.[0];
+  assert.ok(workflow);
+  assert.match(workflow, /id="generate-key"[\s\S]*id="download-key-again"/);
+  assert.doesNotMatch(workflow, /id="key-status"/);
+
+  const output = panel.match(/<section class="card key-output">[\s\S]*?<\/section>/)?.[0];
+  assert.ok(output);
+  assert.match(output, /<h2>Public key output<\/h2>/);
+  assert.match(output, /id="public-key"/);
+  assert.match(output, />Copy public key<\/button>/);
+  assert.match(output, /id="key-status"/);
+  assert.doesNotMatch(output, /matched-data-cli|documentation|cannot recover/i);
+
+  const fallback = panel.match(/<aside class="key-fallback"[\s\S]*?<\/aside>/)?.[0];
+  assert.ok(fallback);
+  assert.match(fallback, /\.\/matched-data-cli generate-key-pair/);
+  assert.match(fallback, /Cloudflare key-generation documentation/);
+  assert.equal((panel.match(/Cloudflare cannot recover it/gi) || []).length, 1);
+});
+
 test("README documents all three tools, workflow, safety, and production URL", async () => {
   const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
   for (const expected of [
