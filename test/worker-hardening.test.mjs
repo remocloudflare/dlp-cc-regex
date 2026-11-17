@@ -45,8 +45,8 @@ test("root uses the shared penguin background with readable layered overlays", a
 
 test("desktop uses a 40/60 layout and long generated values wrap", async () => {
   const body = await rootHtml();
-  assert.match(body, /main\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(0,\s*3fr\)/s);
-  assert.match(body, /@media\s*\(max-width:\s*920px\)\s*\{\s*main\s*\{\s*grid-template-columns:\s*1fr/s);
+  assert.match(body, /\.regex-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(0,\s*3fr\)/s);
+  assert.match(body, /@media\s*\(max-width:\s*920px\)\s*\{[^}]*\.regex-grid[^}]*grid-template-columns:\s*1fr/s);
   assert.match(body, /code\.regex\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
   assert.match(body, /th,td\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
   assert.match(body, /pre\s*\{[^}]*white-space:\s*pre-wrap[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word/s);
@@ -69,6 +69,33 @@ test("client ignores stale scan responses after preset changes", async () => {
   assert.match(body, /const scanSerial = \+\+scanGeneration/);
   assert.match(body, /if \(scanSerial !== scanGeneration\) return;/);
   assert.match(body, /scanController\?\.abort\(\)/);
+});
+
+test("toolkit has accessible tabs and local synthetic-data controls", async () => {
+  const body = await rootHtml();
+  assert.match(body, /role="tablist"/);
+  for (const id of ["regex", "synthetic", "keys"]) {
+    assert.match(body, new RegExp(`id="tab-${id}"[^>]+role="tab"[^>]+aria-controls="panel-${id}"`));
+    assert.match(body, new RegExp(`id="panel-${id}"[^>]+role="tabpanel"[^>]+aria-labelledby="tab-${id}"`));
+  }
+  for (const id of ["demo-type", "demo-quantity", "demo-format", "generate-demo", "demo-output", "copy-all-demo", "test-demo"]) {
+    assert.match(body, new RegExp(`id="${id}"`));
+  }
+  assert.match(body, /toolkit-tabs\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(body, /regex-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(0,\s*3fr\)/s);
+});
+
+test("payload key UI exposes public key and official fallback only", async () => {
+  const body = await rootHtml();
+  assert.match(body, /id="generate-key"/);
+  assert.match(body, /id="public-key"/);
+  assert.match(body, /id="download-key-again"/);
+  assert.match(body, /\.\/matched-data-cli generate-key-pair/);
+  assert.match(body, /https:\/\/developers\.cloudflare\.com\/waf\/managed-rules\/payload-logging\/command-line\/generate-key-pair\//);
+  assert.match(body, /Private key downloaded\. Cloudflare cannot recover it; store it securely\./);
+  assert.doesNotMatch(body, /id="private-key"/);
+  assert.doesNotMatch(body, /localStorage|sessionStorage|indexedDB|caches\.open|console\.(?:log|debug|info|warn|error)/);
+  assert.doesNotMatch(body, /fetch\([^)]*privateKey/s);
 });
 
 test("inline scripts parse and every literal getElementById reference exists", async () => {
