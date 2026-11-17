@@ -25,7 +25,7 @@ test("demo quantities are bounded to integers from 1 through 100", () => {
   assert.equal(generateDemoData({ type: "ssn", quantity: 100, randomBytes: zeroRandom }).length, 100);
 });
 
-test("card demos use documented test BINs and are Luhn-valid", () => {
+test("card demos are synthetic PAN-shaped fixtures using test BINs and are Luhn-valid", () => {
   const values = generateDemoData({ type: "card", quantity: 8, format: "plain", randomBytes: zeroRandom });
   const testBins = ["424242", "400005", "555555", "378282"];
   assert.ok(values.every((value) => testBins.some((bin) => value.startsWith(bin))));

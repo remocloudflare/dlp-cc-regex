@@ -496,6 +496,12 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
+function assertDerPrefix(bytes, prefix, label) {
+  if (bytes.length !== prefix.length + 32 || !prefix.every((byte, index) => bytes[index] === byte)) {
+    throw new Error(`unexpected X25519 ${label} encoding`);
+  }
+}
+
 export async function deriveX25519PublicKey(privateBytes) {
   const bytes = new Uint8Array(privateBytes);
   if (bytes.byteLength !== 32) throw new TypeError("X25519 private key must be exactly 32 bytes");
@@ -503,6 +509,7 @@ export async function deriveX25519PublicKey(privateBytes) {
   const jwk = await crypto.subtle.exportKey("jwk", privateKey);
   const publicKey = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "X25519", x: jwk.x, ext: true }, { name: "X25519" }, true, []);
   const spki = new Uint8Array(await crypto.subtle.exportKey("spki", publicKey));
+  assertDerPrefix(spki, X25519_SPKI_PREFIX, "SPKI");
   return spki.slice(X25519_SPKI_PREFIX.length);
 }
 
@@ -510,6 +517,8 @@ export async function generatePayloadKeyPair() {
   const pair = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
   const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
   const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  assertDerPrefix(pkcs8, X25519_PKCS8_PREFIX, "PKCS#8");
+  assertDerPrefix(spki, X25519_SPKI_PREFIX, "SPKI");
   return {
     privateKey: bytesToBase64(pkcs8.slice(X25519_PKCS8_PREFIX.length)),
     publicKey: bytesToBase64(spki.slice(X25519_SPKI_PREFIX.length)),
@@ -553,7 +562,7 @@ function tfEntry(name, regexSrc, validation) {
 }
 
 // ---------------------------------------------------------------------------
-function html() {
+function html(nonce) {
   const presetOptions = [...new Set(PRESETS.map(({ category }) => category))]
     .map((category) => `<optgroup label="${category}">${PRESETS
       .filter((preset) => preset.category === category)
@@ -712,7 +721,7 @@ function html() {
   <section id="panel-synthetic" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-synthetic" hidden>
     <section class="card">
       <h2>Generate safe synthetic data</h2>
-      <p class="count">For demonstrations only. Card values use documented payment-network test BINs; SSNs use the non-issued 000 area.</p>
+      <p class="count">For demonstrations only. Card values are synthetic PAN-shaped detector fixtures using test BINs; SSNs use the non-issued 000 area.</p>
       <div class="row">
         <div><label for="demo-type">Data type</label><select id="demo-type"><option value="card">Credit cards</option><option value="ssn">SSNs</option></select></div>
         <div><label for="demo-quantity">Quantity</label><input id="demo-quantity" type="number" min="1" max="100" step="1" value="10"/></div>
@@ -733,7 +742,7 @@ function html() {
       <h2>Browser-local X25519 keys</h2>
       <p>Generate a Cloudflare-compatible key pair entirely in this browser. The private key downloads immediately and is retained only in page memory for re-download.</p>
       <div class="actions"><button class="copy" id="generate-key">Generate key pair</button><button class="copy" id="download-key-again" disabled>Download again</button></div>
-      <p class="status ok" id="key-status" aria-live="polite"></p>
+      <p class="status" id="key-status" role="status" aria-live="assertive"></p>
     </section>
     <section class="card">
       <h2>Public key</h2>
@@ -752,9 +761,10 @@ function html() {
   <p class="attribution">Built by <a href="https://itlinux.cc/">Remo Mattei</a> · Powered by <a href="https://www.cloudflare.com/zero-trust/products/">Cloudflare One</a></p>
 </footer>
 
-<script>
+<script nonce="${nonce}">
 const PRESETS = ${JSON.stringify(PRESETS)};
 const TEST_CARD_PREFIXES = ${JSON.stringify(DOCUMENTED_TEST_CARD_PREFIXES)};
+const SSN_REGEX = ['\\\\b000-','\\\\d{2}-','\\\\d{4}\\\\b'].join('');
 const presetEl = document.getElementById('preset');
 
 function applyPreset(id){
@@ -897,11 +907,20 @@ document.getElementById('generate-demo').onclick=()=>{
 document.getElementById('copy-all-demo').onclick=()=>navigator.clipboard.writeText(generatedDemo.join('\\n'));
 document.getElementById('test-demo').onclick=()=>{
   if(document.getElementById('demo-type').value==='card')applyPreset('cc-loose');
+  else {
+    presetEl.value='custom';
+    document.getElementById('regex').value=SSN_REGEX;
+    document.getElementById('validation').value='none';
+    document.getElementById('name').value='Synthetic non-issued SSN fixture';
+  }
   document.getElementById('in').value=generatedDemo.join('\\n');
   run(); selectTool(document.getElementById('tab-regex'));
 };
 
-const PKCS8_PREFIX_LENGTH=16, SPKI_PREFIX_LENGTH=12;
+const PKCS8_PREFIX=[48,46,2,1,0,48,5,6,3,43,101,110,4,34,4,32], SPKI_PREFIX=[48,42,48,5,6,3,43,101,110,3,33,0];
+function assertDerPrefix(bytes,prefix,label){
+  if(bytes.length!==prefix.length+32||!prefix.every((byte,index)=>bytes[index]===byte))throw new Error('Unexpected X25519 '+label+' encoding.');
+}
 function encodeBase64(bytes){let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);}
 let inMemoryPrivateKey;
 let inMemoryFilename;
@@ -916,23 +935,32 @@ function downloadPrivateKey(){
   setTimeout(()=>URL.revokeObjectURL(url),0);
 }
 document.getElementById('generate-key').onclick=async()=>{
-  inMemoryPrivateKey=undefined;
-  const pair=await crypto.subtle.generateKey({name:'X25519'},true,['deriveBits']);
-  const pkcs8=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey));
-  const spki=new Uint8Array(await crypto.subtle.exportKey('spki',pair.publicKey));
-  inMemoryPrivateKey=encodeBase64(pkcs8.slice(PKCS8_PREFIX_LENGTH));
-  inMemoryFilename=keyFilename();
-  document.getElementById('public-key').textContent=encodeBase64(spki.slice(SPKI_PREFIX_LENGTH));
-  document.getElementById('key-status').textContent='Private key downloaded. Cloudflare cannot recover it; store it securely.';
-  document.getElementById('download-key-again').disabled=false;
-  downloadPrivateKey();
+  inMemoryPrivateKey=undefined; inMemoryFilename=undefined;
+  const generateButton=document.getElementById('generate-key'), downloadButton=document.getElementById('download-key-again');
+  const publicKey=document.getElementById('public-key'), status=document.getElementById('key-status');
+  publicKey.textContent='Generate a pair to show the public key.'; status.textContent='Generating key pair…'; status.className='status';
+  generateButton.disabled=true; downloadButton.disabled=true;
+  try {
+    const pair=await crypto.subtle.generateKey({name:'X25519'},true,['deriveBits']);
+    const pkcs8=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey));
+    const spki=new Uint8Array(await crypto.subtle.exportKey('spki',pair.publicKey));
+    assertDerPrefix(pkcs8,PKCS8_PREFIX,'PKCS#8'); assertDerPrefix(spki,SPKI_PREFIX,'SPKI');
+    inMemoryPrivateKey=encodeBase64(pkcs8.slice(PKCS8_PREFIX.length)); inMemoryFilename=keyFilename();
+    publicKey.textContent=encodeBase64(spki.slice(SPKI_PREFIX.length));
+    status.textContent='Private key downloaded. Cloudflare cannot recover it; store it securely.'; status.className='status ok';
+    downloadButton.disabled=false; downloadPrivateKey();
+  } catch(error) {
+    inMemoryPrivateKey=undefined; inMemoryFilename=undefined;
+    status.textContent='Unable to generate key pair in this browser. No private key was retained.'; status.className='status bad';
+  } finally { generateButton.disabled=false; }
 };
 document.getElementById('download-key-again').onclick=downloadPrivateKey;
 addEventListener('unload',()=>{inMemoryPrivateKey=undefined;inMemoryFilename=undefined;});
 
 document.querySelectorAll('button.copy[data-target]').forEach(b=>{
   b.onclick=()=>{ const t=document.getElementById(b.dataset.target).textContent;
-    navigator.clipboard.writeText(t); b.textContent='Copied ✓'; setTimeout(()=>b.textContent='Copy regex',1200); };
+    const originalText=b.textContent;
+    navigator.clipboard.writeText(t); b.textContent='Copied ✓'; setTimeout(()=>b.textContent=originalText,1200); };
 });
 
 applyPreset('cc-loose');
@@ -1099,7 +1127,12 @@ export function createWorker(regexValidator = validateDlpRegex) {
 
       if (url.pathname === "/health") return new Response("ok");
 
-      return new Response(html(), { headers: { "content-type": "text/html; charset=utf-8" } });
+      const nonce = bytesToBase64(crypto.getRandomValues(new Uint8Array(18)));
+      return new Response(html(nonce), { headers: {
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src https://itlinux.cc; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+        "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
+      } });
     },
   };
 }
