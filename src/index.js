@@ -444,6 +444,78 @@ function luhnValid(digits) {
   return sum % 10 === 0;
 }
 
+const DOCUMENTED_TEST_CARD_PREFIXES = ["424242", "400005", "555555", "378282"];
+const demoRandomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
+const randomDigits = (length, randomBytes) => Array.from(randomBytes(length), (byte) => String(byte % 10)).join("");
+
+function luhnCheckDigit(partial) {
+  for (let check = 0; check <= 9; check += 1) {
+    if (luhnValid(`${partial}${check}`)) return String(check);
+  }
+  throw new Error("unable to calculate Luhn check digit");
+}
+
+function formatDemoCard(value, format) {
+  const groups = value.match(/.{1,4}/g);
+  if (format === "plain") return value;
+  if (format === "spaces") return groups.join(" ");
+  if (format === "dashes") return groups.join("-");
+  if (format === "mixed") return groups.map((group, index) => index === 1 ? ` ${group}` : index > 1 ? `${index % 2 ? " " : "-"}${group}` : group).join("");
+  throw new TypeError("card format must be plain, spaces, dashes, or mixed");
+}
+
+export function generateDemoData({ type, quantity = 10, format = "plain", randomBytes = demoRandomBytes } = {}) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+    throw new RangeError("quantity must be an integer from 1 through 100");
+  }
+  if (typeof randomBytes !== "function") throw new TypeError("randomBytes must be a function");
+  if (type === "ssn") {
+    return Array.from({ length: quantity }, () => `000-${randomDigits(2, randomBytes)}-${randomDigits(4, randomBytes)}`);
+  }
+  if (type !== "card") throw new TypeError("type must be card or ssn");
+  return Array.from({ length: quantity }, (_, index) => {
+    const prefix = DOCUMENTED_TEST_CARD_PREFIXES[index % DOCUMENTED_TEST_CARD_PREFIXES.length];
+    const partial = `${prefix}${randomDigits(9, randomBytes)}`;
+    return formatDemoCard(`${partial}${luhnCheckDigit(partial)}`, format);
+  });
+}
+
+const X25519_PKCS8_PREFIX = new Uint8Array([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x04, 0x22, 0x04, 0x20]);
+const X25519_SPKI_PREFIX = new Uint8Array([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x03, 0x21, 0x00]);
+
+function joinBytes(...arrays) {
+  const joined = new Uint8Array(arrays.reduce((total, array) => total + array.length, 0));
+  let offset = 0;
+  for (const array of arrays) { joined.set(array, offset); offset += array.length; }
+  return joined;
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+export async function deriveX25519PublicKey(privateBytes) {
+  const bytes = new Uint8Array(privateBytes);
+  if (bytes.byteLength !== 32) throw new TypeError("X25519 private key must be exactly 32 bytes");
+  const privateKey = await crypto.subtle.importKey("pkcs8", joinBytes(X25519_PKCS8_PREFIX, bytes), { name: "X25519" }, true, ["deriveBits"]);
+  const jwk = await crypto.subtle.exportKey("jwk", privateKey);
+  const publicKey = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "X25519", x: jwk.x, ext: true }, { name: "X25519" }, true, []);
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", publicKey));
+  return spki.slice(X25519_SPKI_PREFIX.length);
+}
+
+export async function generatePayloadKeyPair() {
+  const pair = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  return {
+    privateKey: bytesToBase64(pkcs8.slice(X25519_PKCS8_PREFIX.length)),
+    publicKey: bytesToBase64(spki.slice(X25519_SPKI_PREFIX.length)),
+  };
+}
+
 function withValidation(matches, validation) {
   if (validation !== "luhn") return matches;
   return matches.map((row) => {
@@ -519,8 +591,14 @@ function html() {
   header .nav .sep { flex:1; }
   h1 { margin:0 0 4px; font-size:20px; color:var(--accent); }
   header p { margin:0; color:var(--muted); font-size:13px; max-width:820px; }
-  main { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; padding:24px 28px; align-items:start; }
-  @media (max-width:920px){ main{ grid-template-columns:1fr; } }
+  main { padding:24px 28px; }
+  .toolkit-tabs { display:flex; gap:8px; overflow-x:auto; margin-bottom:18px; scrollbar-width:thin; }
+  .toolkit-tabs button { flex:0 0 auto; background:#21262d; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:9px 14px; cursor:pointer; }
+  .toolkit-tabs button[aria-selected="true"] { color:var(--fg); border-color:var(--accent); box-shadow:inset 0 -2px var(--accent); }
+  .toolkit-panel[hidden] { display:none; }
+  .regex-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; align-items:start; }
+  .panel-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:20px; align-items:start; }
+  @media (max-width:920px){ .regex-grid,.panel-grid{ grid-template-columns:1fr; } main{ padding:18px; } }
   .card { background:rgba(22,27,34,.93); border:1px solid var(--border); border-radius:10px; padding:18px; backdrop-filter:blur(6px); }
   .card h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
   footer.bio { margin:0 28px 24px; padding:14px 18px; max-width:720px; border:1px solid var(--border);
@@ -531,11 +609,16 @@ function html() {
   footer.bio .attribution { margin-top:8px; color:var(--fg); }
   @media (max-width:920px){ footer.bio{ margin:0 18px 18px; } }
   label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
-  input[type=text], textarea, select {
+  input[type=text], input[type=number], textarea, select {
     width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--border);
     border-radius:8px; padding:10px 12px; font-family:ui-monospace,Menlo,monospace; font-size:13px; }
   textarea { min-height:130px; resize:vertical; }
-  .row { display:flex; gap:12px; } .row > * { flex:1; }
+  .row { display:flex; gap:12px; } .row > * { flex:1; min-width:0; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .output-list { display:grid; gap:7px; margin-top:12px; }
+  .output-row { display:flex; gap:8px; align-items:center; min-width:0; }
+  .output-row code { flex:1; overflow-wrap:anywhere; word-break:break-word; }
+  a { color:var(--fg); text-decoration-color:var(--accent); text-underline-offset:2px; }
   code.regex { display:block; background:var(--bg); border:1px solid var(--border); border-radius:8px;
     padding:12px; color:var(--accent); font-family:ui-monospace,monospace; font-size:13px;
     overflow-wrap:anywhere; word-break:break-word; margin-bottom:8px; }
@@ -574,6 +657,12 @@ function html() {
   <p>Author and test a regex for a Cloudflare DLP <em>custom entry</em>, then copy the Rust regex pattern for the dashboard or a ready-made Terraform block. Ships with a loose credit-card preset that catches numbers like <code>1 344-4343 12345</code> the default PCI detector misses.</p>
 </header>
 <main>
+  <nav class="toolkit-tabs" role="tablist" aria-label="DLP demo tools">
+    <button id="tab-regex" role="tab" aria-controls="panel-regex" aria-selected="true" tabindex="0">Regex Builder</button>
+    <button id="tab-synthetic" role="tab" aria-controls="panel-synthetic" aria-selected="false" tabindex="-1">Synthetic Demo Data</button>
+    <button id="tab-keys" role="tab" aria-controls="panel-keys" aria-selected="false" tabindex="-1">Payload Logging Keys</button>
+  </nav>
+  <section id="panel-regex" class="toolkit-panel regex-grid" role="tabpanel" aria-labelledby="tab-regex">
   <section class="card">
     <h2>1 · Build your pattern</h2>
     <label>Preset</label>
@@ -620,6 +709,43 @@ function html() {
     <button class="copy" data-target="tf">Copy tfvars entry</button>
     <p class="count">Append this object to <code>dlp_custom_entries</code> in <code>terraform.tfvars</code>, then <code>terraform apply</code>.</p>
   </section>
+  </section>
+
+  <section id="panel-synthetic" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-synthetic" hidden>
+    <section class="card">
+      <h2>Generate safe synthetic data</h2>
+      <p class="count">For demonstrations only. Card values use documented payment-network test BINs; SSNs use the non-issued 000 area.</p>
+      <div class="row">
+        <div><label for="demo-type">Data type</label><select id="demo-type"><option value="card">Credit cards</option><option value="ssn">SSNs</option></select></div>
+        <div><label for="demo-quantity">Quantity</label><input id="demo-quantity" type="number" min="1" max="100" step="1" value="10"/></div>
+        <div><label for="demo-format">Card formatting</label><select id="demo-format"><option value="plain">Plain</option><option value="spaces">Spaces</option><option value="dashes">Dashes</option><option value="mixed">Mixed separators</option></select></div>
+      </div>
+      <button class="copy" id="generate-demo">Generate synthetic data</button>
+    </section>
+    <section class="card">
+      <h2>Synthetic, non-production output</h2>
+      <p class="count" id="demo-status" aria-live="polite">Nothing generated yet.</p>
+      <div class="actions"><button class="copy" id="copy-all-demo" disabled>Copy all</button><button class="copy" id="test-demo" disabled>Test in Regex Builder</button></div>
+      <div id="demo-output" class="output-list"></div>
+    </section>
+  </section>
+
+  <section id="panel-keys" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-keys" hidden>
+    <section class="card">
+      <h2>Browser-local X25519 keys</h2>
+      <p>Generate a Cloudflare-compatible key pair entirely in this browser. The private key downloads immediately and is retained only in page memory for re-download.</p>
+      <div class="actions"><button class="copy" id="generate-key">Generate key pair</button><button class="copy" id="download-key-again" disabled>Download again</button></div>
+      <p class="status ok" id="key-status" aria-live="polite"></p>
+    </section>
+    <section class="card">
+      <h2>Public key</h2>
+      <code class="regex" id="public-key">Generate a pair to show the public key.</code>
+      <button class="copy" data-target="public-key">Copy public key</button>
+      <p class="count">Official fallback: <code>./matched-data-cli generate-key-pair</code></p>
+      <p class="count"><a href="https://developers.cloudflare.com/waf/managed-rules/payload-logging/command-line/generate-key-pair/" target="_blank" rel="noopener">Cloudflare key-generation documentation</a></p>
+      <p class="count">Private key downloaded. Cloudflare cannot recover it; store it securely.</p>
+    </section>
+  </section>
 </main>
 <footer class="bio">
   <h2>Who am I</h2>
@@ -630,6 +756,7 @@ function html() {
 
 <script>
 const PRESETS = ${JSON.stringify(PRESETS)};
+const TEST_CARD_PREFIXES = ${JSON.stringify(DOCUMENTED_TEST_CARD_PREFIXES)};
 const presetEl = document.getElementById('preset');
 
 function applyPreset(id){
@@ -706,7 +833,107 @@ async function run(){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-document.querySelectorAll('button.copy').forEach(b=>{
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function selectTool(tab){
+  tabs.forEach(candidate=>{
+    const selected = candidate === tab;
+    candidate.setAttribute('aria-selected', String(selected));
+    candidate.tabIndex = selected ? 0 : -1;
+    document.getElementById(candidate.getAttribute('aria-controls')).hidden = !selected;
+  });
+}
+tabs.forEach((tab,index)=>{
+  tab.onclick=()=>selectTool(tab);
+  tab.onkeydown=event=>{
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key==='Home' ? 0 : event.key==='End' ? tabs.length-1 : (index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+    selectTool(tabs[next]); tabs[next].focus();
+  };
+});
+
+function browserRandomDigits(length){
+  return Array.from(crypto.getRandomValues(new Uint8Array(length)),byte=>String(byte%10)).join('');
+}
+function browserLuhnValid(value){
+  let sum=0, alt=false;
+  for(let index=value.length-1;index>=0;index--){ let digit=Number(value[index]); if(alt){digit*=2;if(digit>9)digit-=9;} sum+=digit;alt=!alt; }
+  return sum%10===0;
+}
+function browserCheckDigit(partial){ for(let check=0;check<10;check++) if(browserLuhnValid(partial+check)) return String(check); }
+function browserFormatCard(value,format){
+  const groups=value.match(/.{1,4}/g);
+  if(format==='plain')return value;
+  if(format==='spaces')return groups.join(' ');
+  if(format==='dashes')return groups.join('-');
+  return groups.map((group,index)=>index===0?group:(index%2?' ':'-')+group).join('');
+}
+function browserGenerateDemoData(type,quantity,format){
+  return Array.from({length:quantity},(_,index)=>{
+    if(type==='ssn')return '000-'+browserRandomDigits(2)+'-'+browserRandomDigits(4);
+    const partial=TEST_CARD_PREFIXES[index%TEST_CARD_PREFIXES.length]+browserRandomDigits(9);
+    return browserFormatCard(partial+browserCheckDigit(partial),format);
+  });
+}
+let generatedDemo=[];
+function renderDemo(values,type){
+  generatedDemo=values;
+  const output=document.getElementById('demo-output'); output.replaceChildren();
+  values.forEach(value=>{
+    const row=document.createElement('div'); row.className='output-row';
+    const code=document.createElement('code'); code.textContent=value;
+    const button=document.createElement('button'); button.className='copy'; button.textContent='Copy one'; button.onclick=()=>navigator.clipboard.writeText(value);
+    row.append(code,button); output.appendChild(row);
+  });
+  document.getElementById('demo-status').textContent=values.length+' synthetic '+(type==='ssn'?'non-issued SSN':'test card')+' value(s).';
+  document.getElementById('copy-all-demo').disabled=false;
+  document.getElementById('test-demo').disabled=false;
+}
+document.getElementById('demo-type').onchange=event=>document.getElementById('demo-format').disabled=event.target.value==='ssn';
+document.getElementById('generate-demo').onclick=()=>{
+  const type=document.getElementById('demo-type').value;
+  const quantity=Number(document.getElementById('demo-quantity').value);
+  if(!Number.isInteger(quantity)||quantity<1||quantity>100){document.getElementById('demo-status').textContent='Quantity must be an integer from 1 through 100.';return;}
+  const values=browserGenerateDemoData(type,quantity,document.getElementById('demo-format').value);
+  renderDemo(values,type);
+};
+document.getElementById('copy-all-demo').onclick=()=>navigator.clipboard.writeText(generatedDemo.join('\\n'));
+document.getElementById('test-demo').onclick=()=>{
+  if(document.getElementById('demo-type').value==='card')applyPreset('cc-loose');
+  document.getElementById('in').value=generatedDemo.join('\\n');
+  run(); selectTool(document.getElementById('tab-regex'));
+};
+
+const PKCS8_PREFIX_LENGTH=16, SPKI_PREFIX_LENGTH=12;
+function encodeBase64(bytes){let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);}
+let inMemoryPrivateKey;
+let inMemoryFilename;
+function keyFilename(){
+  const date=new Date(); const pad=value=>String(value).padStart(2,'0');
+  return 'cloudflare-payload-logging-private-key-'+date.getFullYear()+pad(date.getMonth()+1)+pad(date.getDate())+'-'+pad(date.getHours())+pad(date.getMinutes())+pad(date.getSeconds())+'.txt';
+}
+function downloadPrivateKey(){
+  if(!inMemoryPrivateKey)return;
+  const url=URL.createObjectURL(new Blob([inMemoryPrivateKey+'\\n'],{type:'text/plain;charset=utf-8'}));
+  const anchor=document.createElement('a'); anchor.href=url; anchor.download=inMemoryFilename; anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+document.getElementById('generate-key').onclick=async()=>{
+  inMemoryPrivateKey=undefined;
+  const pair=await crypto.subtle.generateKey({name:'X25519'},true,['deriveBits']);
+  const pkcs8=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey));
+  const spki=new Uint8Array(await crypto.subtle.exportKey('spki',pair.publicKey));
+  inMemoryPrivateKey=encodeBase64(pkcs8.slice(PKCS8_PREFIX_LENGTH));
+  inMemoryFilename=keyFilename();
+  document.getElementById('public-key').textContent=encodeBase64(spki.slice(SPKI_PREFIX_LENGTH));
+  document.getElementById('key-status').textContent='Private key downloaded. Cloudflare cannot recover it; store it securely.';
+  document.getElementById('download-key-again').disabled=false;
+  downloadPrivateKey();
+};
+document.getElementById('download-key-again').onclick=downloadPrivateKey;
+addEventListener('unload',()=>{inMemoryPrivateKey=undefined;inMemoryFilename=undefined;});
+
+document.querySelectorAll('button.copy[data-target]').forEach(b=>{
   b.onclick=()=>{ const t=document.getElementById(b.dataset.target).textContent;
     navigator.clipboard.writeText(t); b.textContent='Copied ✓'; setTimeout(()=>b.textContent=b.dataset.target==='rx'?'Copy regex':'Copy tfvars entry',1200); };
 });
