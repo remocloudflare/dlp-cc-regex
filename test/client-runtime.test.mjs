@@ -20,7 +20,7 @@ function element(id) {
 }
 
 test("key generation downloads once, exposes only public key, and re-downloads identical private file", async () => {
-  const ids = ["preset","regex","validation","in","name","preset-note","th-v","rows","rx","count","validation-status","compatibility-warn","demo-type","demo-quantity","demo-format","generate-demo","demo-output","demo-status","copy-all-demo","test-demo","generate-key","download-key-again","public-key","key-status","tab-regex","panel-regex","tab-synthetic","panel-synthetic","tab-keys","panel-keys"];
+  const ids = ["preset","regex","validation","in","name","preset-note","th-v","rows","rx","count","validation-status","compatibility-warn","toolkit-title","toolkit-intro","demo-type","demo-quantity","demo-format","generate-demo","demo-output","demo-status","copy-all-demo","test-demo","generate-key","download-key-again","public-key","key-status","tab-regex","panel-regex","tab-synthetic","panel-synthetic","tab-keys","panel-keys"];
   const elements = Object.fromEntries(ids.map((id) => [id, element(id)]));
   elements["demo-type"].value = "card"; elements["demo-quantity"].value = "10"; elements["demo-format"].value = "plain";
   for (const id of ["regex","validation","in","name"]) elements[id].addEventListener = () => {};
@@ -35,6 +35,7 @@ test("key generation downloads once, exposes only public key, and re-downloads i
     navigator: { clipboard: { writeText() {} } },
     URL: { createObjectURL(blob) { const url = `blob:${++nextUrl}`; blobs.set(url, blob); return url; }, revokeObjectURL() {} },
     document: {
+      title: "",
       getElementById(id) { return elements[id]; },
       querySelectorAll(selector) { return selector === '[role="tab"]' ? tabs : selector === 'button.copy[data-target]' ? copies : []; },
       createElement(tag) { const node = element(tag); node.click = () => { if (tag === "a") downloads.push({ filename: node.download, url: node.href }); }; return node; },
@@ -78,6 +79,9 @@ test("key generation downloads once, exposes only public key, and re-downloads i
 
   tabs[0].onkeydown({ key: "ArrowRight", preventDefault() {} });
   assert.equal(tabs[1].attributes["aria-selected"], "true");
+  assert.equal(elements["toolkit-title"].textContent, "Synthetic Demo Data");
+  assert.match(elements["toolkit-intro"].textContent, /safe, synthetic values/);
+  assert.equal(context.document.title, "Synthetic Demo Data | DLP Demo Toolkit");
 });
 
 
