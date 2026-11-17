@@ -8,7 +8,7 @@ const okValidator = (regex) => ({ valid: true, byteLength: regex.length, rust: {
 
 async function clientScript() {
   const html = await (await createWorker(okValidator).fetch(new Request("https://example.invalid/"))).text();
-  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
+  return [...html.matchAll(/<script(?: nonce="[^"]+")?>([\s\S]*?)<\/script>/g)][0][1];
 }
 
 function element(id) {
@@ -62,4 +62,29 @@ test("key generation downloads once, exposes only public key, and re-downloads i
   assert.equal(downloads.length, 2);
   assert.equal(downloads[1].filename, downloads[0].filename);
   assert.equal(await blobs.get(downloads[1].url).text(), firstBody);
+
+  elements["demo-type"].value = "ssn";
+  elements["test-demo"].onclick();
+  assert.equal(elements.regex.value, "\\b000-\\d{2}-\\d{4}\\b");
+  assert.equal(elements.validation.value, "none");
+
+  const originalGenerateKey = context.crypto.subtle.generateKey;
+  context.crypto.subtle.generateKey = async () => { throw new Error("unsupported"); };
+  await elements["generate-key"].onclick();
+  assert.equal(elements["download-key-again"].disabled, true);
+  assert.match(elements["key-status"].textContent, /Unable to generate key pair/);
+  assert.equal(elements["public-key"].textContent, "Generate a pair to show the public key.");
+  context.crypto.subtle.generateKey = originalGenerateKey;
+
+  tabs[0].onkeydown({ key: "ArrowRight", preventDefault() {} });
+  assert.equal(tabs[1].attributes["aria-selected"], "true");
+});
+
+
+test("browser runtime handles copy reset, SSN handoff, key failure, and keyboard tabs", async () => {
+  const source = await clientScript();
+  assert.match(source, /const originalText=b\.textContent/);
+  assert.match(source, /document\.getElementById\('regex'\)\.value=SSN_REGEX/);
+  assert.match(source, /Unable to generate key pair in this browser/);
+  assert.match(source, /\['ArrowLeft','ArrowRight','Home','End'\]/);
 });

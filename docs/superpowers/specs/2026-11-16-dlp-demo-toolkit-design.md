@@ -28,7 +28,7 @@ Controls:
 
 Credit-card behavior:
 
-- Generate Luhn-valid numbers using documented payment-network test BINs rather than random production-looking account ranges.
+- Generate Luhn-valid synthetic PAN-shaped detector fixtures using test BINs rather than random production-looking account ranges. They are not an official or complete set of payment-network test cards.
 - Label all output as synthetic test data.
 - Support plain, spaces, dashes, and mixed-separator formatting so the existing loose credit-card detector can be demonstrated.
 - Never claim the numbers are usable payment credentials.
