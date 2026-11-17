@@ -1,6 +1,23 @@
-# dlp-cc-regex
+# DLP Demo Toolkit
 
-A self-serve **DLP Regex Builder** (Cloudflare Worker frontend) + a **Terraform module** that deploys it alongside a Cloudflare **DLP custom profile** — built to catch credit-card numbers with *creative* formatting (e.g. `1 344-4343 12345`) that Cloudflare's default PCI detector misses.
+A self-serve Cloudflare Worker with three browser-based demo tools:
+
+- **Regex Builder** — author and test Rust-compatible Cloudflare DLP custom entries with authoritative Wasm validation and optional Luhn checks.
+- **Synthetic Demo Data** — generate non-production credit-card and non-issued SSN detector fixtures, then copy them or choose **Test in Regex Builder** for an end-to-end demonstration.
+- **Payload Logging Keys** — create a browser-local X25519 key pair. Copy the public key into Cloudflare; the private key downloads automatically, remains only in page memory for re-download, and must be stored securely.
+
+Production toolkit: <https://dlp-regex.itlinux.cc/>
+
+## Toolkit usage and safety
+
+1. Select a tool from the tabs; its page heading, explanation, and browser title update to match.
+2. In **Regex Builder**, choose a preset or custom pattern, test it against safe sample text, and copy the validated Rust regex.
+3. In **Synthetic Demo Data**, generate fixtures and use **Test in Regex Builder** to validate them without real customer data.
+4. In **Payload Logging Keys**, generate X25519 keys, copy only the public key to Cloudflare, and move the automatically downloaded private key to secure storage.
+
+Never paste real customer data or credentials into the public toolkit. Synthetic outputs are detector fixtures, not real identities, accounts, payment credentials, or production secrets. Private keys are not sent to the Worker or recoverable by Cloudflare; losing the downloaded key means generating a new pair.
+
+The Regex Builder is built to catch credit-card numbers with *creative* formatting (e.g. `1 344-4343 12345`) that Cloudflare's default PCI detector misses. The `terraform` branch contains the optional infrastructure module for deploying a DLP custom profile.
 
 ```
 ┌─────────────────────────┐        ┌──────────────────────────────┐

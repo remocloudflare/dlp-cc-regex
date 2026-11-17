@@ -574,7 +574,7 @@ function html(nonce) {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>DLP Regex Builder</title>
+<title>Regex Builder | DLP Demo Toolkit</title>
 <style>
   :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#e6edf3;
           --muted:#8b949e; --accent:#f0883e; --ok:#3fb950; --warn:#d29922; --dim:#484f58; }
@@ -600,7 +600,11 @@ function html(nonce) {
   header .nav .sep { flex:1; }
   h1 { margin:0 0 4px; font-size:20px; color:var(--accent); }
   header p { margin:0; color:var(--muted); font-size:13px; max-width:820px; }
+  .site-identity { margin-bottom:5px; color:var(--fg); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
   main { padding:24px 28px; }
+  .toolkit-overview { margin-bottom:16px; padding:13px 16px; border:1px solid var(--border); border-radius:10px; background:rgba(22,27,34,.82); }
+  .toolkit-overview h2 { margin:0 0 4px; font-size:13px; color:var(--fg); }
+  .toolkit-overview p { margin:0; color:var(--muted); font-size:12px; }
   .toolkit-tabs { display:flex; gap:8px; overflow-x:auto; margin-bottom:18px; scrollbar-width:thin; }
   .toolkit-tabs button { flex:0 0 auto; background:#21262d; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:9px 14px; cursor:pointer; }
   .toolkit-tabs button[aria-selected="true"] { color:var(--fg); border-color:var(--accent); box-shadow:inset 0 -2px var(--accent); }
@@ -662,10 +666,15 @@ function html(nonce) {
     <a href="https://aigw.itlinux.cc/">AI Gateway</a>
     <a href="https://demobot.itlinux.cc/">DemoBot</a>
   </nav>
-  <h1>DLP Regex Builder</h1>
-  <p>Author and test a regex for a Cloudflare DLP <em>custom entry</em>, then copy the Rust regex pattern for the dashboard or a ready-made Terraform block. Ships with a loose credit-card preset that catches numbers like <code>1 344-4343 12345</code> the default PCI detector misses.</p>
+  <div class="site-identity">DLP Demo Toolkit</div>
+  <h1 id="toolkit-title">Regex Builder</h1>
+  <p id="toolkit-intro">Author and test a Cloudflare DLP custom entry with the authoritative Rust regex engine, then copy the validated pattern into your DLP workflow.</p>
 </header>
 <main>
+  <section class="toolkit-overview" aria-labelledby="toolkit-overview-title">
+    <h2 id="toolkit-overview-title">What this toolkit does</h2>
+    <p>Build and validate Rust-compatible DLP regexes, generate safe synthetic detector fixtures, and create browser-local X25519 payload logging keys.</p>
+  </section>
   <nav class="toolkit-tabs" role="tablist" aria-label="DLP demo tools">
     <button id="tab-regex" role="tab" aria-controls="panel-regex" aria-selected="true" tabindex="0">Regex Builder</button>
     <button id="tab-synthetic" role="tab" aria-controls="panel-synthetic" aria-selected="false" tabindex="-1">Synthetic Demo Data</button>
@@ -674,6 +683,7 @@ function html(nonce) {
   <section id="panel-regex" class="toolkit-panel regex-grid" role="tabpanel" aria-labelledby="tab-regex">
   <section class="card">
     <h2>1 · Build your pattern</h2>
+    <p class="count">Choose a preset or write your own pattern, test customer-safe sample text, review authoritative matches, and copy the result for Cloudflare DLP.</p>
     <label>Preset</label>
     <select id="preset">${presetOptions}</select>
     <p class="count" id="preset-note"></p>
@@ -721,7 +731,7 @@ function html(nonce) {
   <section id="panel-synthetic" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-synthetic" hidden>
     <section class="card">
       <h2>Generate safe synthetic data</h2>
-      <p class="count">For demonstrations only. Card values are synthetic PAN-shaped detector fixtures using test BINs; SSNs use the non-issued 000 area.</p>
+      <p class="count">For demonstrations only. Card values are synthetic PAN-shaped detector fixtures using test BINs; SSNs use the non-issued 000 area. Generate a batch, then use Test in Regex Builder to verify the detector workflow without real customer data.</p>
       <div class="row">
         <div><label for="demo-type">Data type</label><select id="demo-type"><option value="card">Credit cards</option><option value="ssn">SSNs</option></select></div>
         <div><label for="demo-quantity">Quantity</label><input id="demo-quantity" type="number" min="1" max="100" step="1" value="10"/></div>
@@ -740,7 +750,7 @@ function html(nonce) {
   <section id="panel-keys" class="toolkit-panel panel-grid" role="tabpanel" aria-labelledby="tab-keys" hidden>
     <section class="card">
       <h2>Browser-local X25519 keys</h2>
-      <p>Generate a Cloudflare-compatible key pair entirely in this browser. The private key downloads immediately and is retained only in page memory for re-download.</p>
+      <p>Generate a Cloudflare-compatible X25519 key pair entirely in this browser. Copy the public key into Cloudflare payload logging; the private key downloads automatically and is retained only in page memory for re-download. Store it securely because Cloudflare cannot recover it.</p>
       <div class="actions"><button class="copy" id="generate-key">Generate key pair</button><button class="copy" id="download-key-again" disabled>Download again</button></div>
       <p class="status" id="key-status" role="status" aria-live="assertive"></p>
     </section>
@@ -841,6 +851,23 @@ async function run(){
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
+const TOOL_CONTENT = {
+  'tab-regex': {
+    title: 'Regex Builder | DLP Demo Toolkit',
+    heading: 'Regex Builder',
+    intro: 'Author and test a Cloudflare DLP custom entry with the authoritative Rust regex engine, then copy the validated pattern into your DLP workflow.',
+  },
+  'tab-synthetic': {
+    title: 'Synthetic Demo Data | DLP Demo Toolkit',
+    heading: 'Synthetic Demo Data',
+    intro: 'Generate safe, synthetic values for DLP demonstrations, copy them as fixtures, or send them directly to Test in Regex Builder.',
+  },
+  'tab-keys': {
+    title: 'Payload Logging Keys | DLP Demo Toolkit',
+    heading: 'Payload Logging Keys',
+    intro: 'Generate X25519 keys for Cloudflare payload logging locally in your browser: copy the public key to Cloudflare and securely retain the automatically downloaded private key.',
+  },
+};
 function selectTool(tab){
   tabs.forEach(candidate=>{
     const selected = candidate === tab;
@@ -848,6 +875,10 @@ function selectTool(tab){
     candidate.tabIndex = selected ? 0 : -1;
     document.getElementById(candidate.getAttribute('aria-controls')).hidden = !selected;
   });
+  const tool=TOOL_CONTENT[tab.id];
+  document.title=tool.title;
+  document.getElementById('toolkit-title').textContent=tool.heading;
+  document.getElementById('toolkit-intro').textContent=tool.intro;
 }
 tabs.forEach((tab,index)=>{
   tab.onclick=()=>selectTool(tab);
